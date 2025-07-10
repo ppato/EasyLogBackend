@@ -1,0 +1,143 @@
+{
+  "info": {
+    "name": "EasyLogSaaS - Register, Login, Logs",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Register Company + Admin",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:4000/api/register-company",
+          "host": [
+            "localhost"
+          ],
+          "port": "4000",
+          "path": [
+            "api",
+            "register-company"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"companyId\": \"empresa123\",\n  \"companyName\": \"Empresa 123 S.A.\",\n  \"email\": \"admin@empresa123.com\",\n  \"password\": \"123456\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Register User in Existing Company",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:4000/api/register",
+          "host": [
+            "localhost"
+          ],
+          "port": "4000",
+          "path": [
+            "api",
+            "register"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"user1@empresa123.com\",\n  \"password\": \"123456\",\n  \"companyId\": \"empresa123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:4000/api/login",
+          "host": [
+            "localhost"
+          ],
+          "port": "4000",
+          "path": [
+            "api",
+            "login"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@empresa123.com\",\n  \"password\": \"123456\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Create Log (filtered by companyId from token)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:4000/api/logs",
+          "host": [
+            "localhost"
+          ],
+          "port": "4000",
+          "path": [
+            "api",
+            "logs"
+          ]
+        },
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"app\": \"auth-service\",\n  \"service\": \"LoginService\",\n  \"message\": \"Error grave al autenticar\",\n  \"level\": \"critical\",\n  \"context\": {\n    \"errorCode\": 500,\n    \"extra\": \"timeout en conexi\u00f3n con base de datos\"\n  }\n}"
+        }
+      }
+    },
+    {
+      "name": "Get Logs (filtered by companyId from token)",
+      "request": {
+        "method": "GET",
+        "header": [
+          {
+            "key": "Authorization",
+            "value": "Bearer {{token}}"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:4000/api/logs",
+          "host": [
+            "localhost"
+          ],
+          "port": "4000",
+          "path": [
+            "api",
+            "logs"
+          ]
+        }
+      }
+    }
+  ]
+}
