@@ -1,13 +1,18 @@
 const express = require('express');
 const router = express.Router();
-const { createLog, getLogs, getLogLevels } = require('../controllers/log.controller'); // 👈 Agregado getLogLevels
+const {
+  createLog,
+  getLogs,
+  getLogLevels,
+  getServiceStatus // 👈 nueva función
+} = require('../controllers/log.controller');
 const verifyToken = require('../middlewares/verifyToken');
 
 router.post('/logs', verifyToken, createLog);
 router.get('/logs', verifyToken, getLogs);
-router.get('/logs/levels', verifyToken, getLogLevels); // ✅ Ruta para niveles
+router.get('/logs/levels', verifyToken, getLogLevels);
+
+// NUEVO ENDPOINT
+router.get('/service-status', verifyToken, getServiceStatus); // ✅
 
 module.exports = router;
-// Exportamos el router para usarlo en app.js
-// Asegúrate de que verifyToken esté correctamente implementado para validar JWT y extraer
-// companyId y userId del token. Aquí asumimos que req.user tiene esos campos después de la verificación    

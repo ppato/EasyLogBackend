@@ -3,8 +3,16 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/user.model');
 const Company = require('../models/company.model');
 
+const DEFAULT_AVATAR = 'https://tu-dominio.com/img/default-avatar.png'; // cámbialo si quieres
+
+// Helpers
+function buildSafeUser(userDoc) {
+  const { password, __v, ...rest } = userDoc.toObject();
+  return rest;
+}
+
 exports.register = async (req, res) => {
-  const { email, password, companyId, name, phone } = req.body;
+  const { email, password, companyId, name, phone, photoUrl } = req.body;
 
   if (!email || !password || !companyId) {
     return res.status(400).json({ message: 'Faltan datos obligatorios' });
@@ -21,7 +29,8 @@ exports.register = async (req, res) => {
     password: hashedPassword,
     companyId,
     name,
-    phone
+    phone,
+    photoUrl: photoUrl || DEFAULT_AVATAR,
   });
   await user.save();
 
@@ -31,7 +40,11 @@ exports.register = async (req, res) => {
     { expiresIn: '1h' }
   );
 
-  res.status(201).json({ message: 'Usuario registrado', token });
+  res.status(201).json({
+    message: 'Usuario registrado',
+    token,
+    user: buildSafeUser(user), // ← devuelve photoUrl al front
+  });
 };
 
 exports.login = async (req, res) => {
@@ -49,11 +62,15 @@ exports.login = async (req, res) => {
     { expiresIn: '1h' }
   );
 
-  res.json({ message: 'Login exitoso', token });
+  res.json({
+    message: 'Login exitoso',
+    token,
+    user: buildSafeUser(user), // ← incluye photoUrl
+  });
 };
 
 exports.registerCompany = async (req, res) => {
-  const { companyId, companyName, email, password, name, phone } = req.body;
+  const { companyId, companyName, email, password, name, phone, photoUrl } = req.body;
 
   if (!companyId || !companyName || !email || !password) {
     return res.status(400).json({ message: 'Faltan datos obligatorios' });
@@ -78,7 +95,8 @@ exports.registerCompany = async (req, res) => {
     password: hashedPassword,
     companyId,
     name,
-    phone
+    phone,
+    photoUrl: photoUrl || DEFAULT_AVATAR,
   });
   await user.save();
 
@@ -88,5 +106,32 @@ exports.registerCompany = async (req, res) => {
     { expiresIn: '1h' }
   );
 
-  res.status(201).json({ message: 'Empresa y usuario creados', token });
+  res.status(201).json({
+    message: 'Empresa y usuario creados',
+    token,
+    user: buildSafeUser(user),
+  });
+};
+
+/**
+ * PUT /api/users/:userId/photo
+ * Body: { photoUrl: "https://..." }
+ * Auth: Bearer <token>
+ */
+exports.updatePhotoUrl = async (req, res) => {
+  const { userId } = req.params;
+  const { photoUrl } = req.body;
+
+  if (!photoUrl) {
+    return res.status(400).json({ message: 'Falta la URL de la foto' });
+  }
+
+  const updated = await User.findByIdAndUpdate(
+    userId,
+    { photoUrl },
+    { new: true }
+  );
+  if (!updated) return res.status(404).json({ message: 'Usuario no encontrado' });
+
+  res.json({ message: 'Foto actualizada', user: buildSafeUser(updated) });
 };

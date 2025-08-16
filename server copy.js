@@ -5,17 +5,14 @@ const cors = require('cors');
 
 const authRoutes = require('./routes/auth.routes');
 const logRoutes = require('./routes/log.routes');
-const userRoutes = require('./routes/user.routes');
+const userRoutes = require('./routes/user.routes'); // 👈 NUEVO
 
-// 👇 NUEVO: rutas de consultas SQL-like
-const queryRoutes = require('./routes/query.routes');
-const quotaRoutes  = require('./routes/quota.routes'); // 👈 agrega este require
 dotenv.config();
 const app = express();
 
 app.use(cors({
   origin: 'http://localhost:4200',
-  methods: ['GET', 'POST'], // si luego usas PUT/DELETE, agrégalos aquí
+  methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }));
 
@@ -27,15 +24,7 @@ mongoose.connect(process.env.MONGO_URI)
 
 app.use('/api', authRoutes);
 app.use('/api', logRoutes);
-app.use('/api/users', userRoutes);
-
-// 👇 NUEVO: monta POST /api/query-logs
-app.use('/api', queryRoutes);
-
-// server.js (montaje)
-app.use('/api', quotaRoutes); // 👈 monta GET /api/quota/summary
-
+app.use('/api/users', userRoutes); // 👈 NUEVO
 
 const PORT = process.env.PORT || 4000;
 app.listen(PORT, () => console.log(`🚀 Server running on port ${PORT}`));
-

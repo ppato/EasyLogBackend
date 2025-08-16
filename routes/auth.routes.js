@@ -11,7 +11,9 @@ const {
 const verifyToken = require('../middlewares/verifyToken');
 
 router.post('/register-company', registerCompany);
-router.post('/register', register);
 router.post('/login', login);
+// 🚫 Deshabilitado en producción para evitar registros externos
+router.post('/register', register);
+
 
 module.exports = router;
