@@ -1,0 +1,202 @@
+Manual de Integración — EasyLogs (Cliente)
+1) ¿Qué hace?
+
+Enviar eventos de log a EasyLogs.
+
+URL (prod): https://easylogbackend.onrender.com/api/logs
+
+Método: POST
+
+Auth: Authorization: Bearer <TOKEN_DE_INGESTA> (provisto por EasyLogs)
+
+Content-Type: application/json
+
+2) Payload mínimo
+{
+  "level": "info | warning | error | critical",
+  "service": "nombre-del-servicio",
+  "app": "nombre-de-la-app",
+  "message": "texto descriptivo",
+  "url": "/ruta/opcional",
+  "context": { "clave": "valor" },
+  "timestamp": "YYYY-MM-DDTHH:mm:ss.SSSZ",
+  "userId": "opcional"
+}
+
+
+No enviar companyId: EasyLogs lo toma del token.
+
+3) Ejemplos rápidos
+cURL
+curl -X POST "https://easylogbackend.onrender.com/api/logs" \
+  -H "Authorization: Bearer <TOKEN_DE_INGESTA>" \
+  -H "Content-Type: application/json" \
+  -d '{"level":"info","service":"web","app":"miapp","message":"ok","timestamp":"2025-08-17T00:00:00.000Z"}'
+
+Node.js (1 línea usando helper)
+// helper (copiar una vez)
+async function easylog(token, data){return fetch("https://easylogbackend.onrender.com/api/logs",{method:"POST",headers:{Authorization:`Bearer ${token}`,"Content-Type":"application/json"},body:JSON.stringify(data)});}
+// uso (1 línea):
+easylog(process.env.EASYLOGS_TOKEN,{level:"info",service:"web",app:"miapp",message:"ok"});
+
+Python
+import os, requests
+requests.post(
+  "https://easylogbackend.onrender.com/api/logs",
+  headers={"Authorization": f"Bearer {os.getenv('EASYLOGS_TOKEN')}", "Content-Type":"application/json"},
+  json={"level":"info","service":"web","app":"miapp","message":"ok"}
+)
+
+Java (WebClient)
+WebClient client = WebClient.builder()
+  .baseUrl("https://easylogbackend.onrender.com")
+  .defaultHeader(HttpHeaders.AUTHORIZATION, "Bearer " + System.getenv("EASYLOGS_TOKEN"))
+  .build();
+client.post().uri("/api/logs").contentType(MediaType.APPLICATION_JSON)
+  .bodyValue(Map.of("level","info","service","web","app","miapp","message","ok"))
+  .retrieve().bodyToMono(Map.class).block();
+
+.NET
+var http = new HttpClient{ BaseAddress=new Uri("https://easylogbackend.onrender.com") };
+http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Environment.GetEnvironmentVariable("EASYLOGS_TOKEN"));
+await http.PostAsJsonAsync("/api/logs", new { level="info", service="web", app="miapp", message="ok" });
+
+VB6/VBA (WinHTTP)
+Dim http As Object: Set http = CreateObject("WinHttp.WinHttpRequest.5.1")
+http.Open "POST", "https://easylogbackend.onrender.com/api/logs", False
+http.SetRequestHeader "Authorization", "Bearer " & GetTokenFromConfig() ' <-- léelo de config
+http.SetRequestHeader "Content-Type", "application/json"
+http.Send "{""level"":""info"",""service"":""web"",""app"":""miapp"",""message"":""ok""}"
+
+4) Token sin pases a producción (clave)
+
+Objetivo: que el token caduque y se renueve sin re-compilar ni desplegar código.
+
+Reglas simples
+
+No hardcodear el token en el código.
+
+Guardarlo en un secreto/config (variable de entorno, archivo, secret manager).
+
+La app lee el token del secreto en runtime (o al iniciar).
+
+Al rotarlo, solo actualizas el secreto y reinicias el proceso (o recargas config). No hay deploy.
+
+Dónde guardarlo
+
+Servidor/contenedor: variable de entorno EASYLOGS_TOKEN.
+
+Escritorio/legacy: archivo config.ini/registro/credential manager.
+
+Cloud: Secret Manager (AWS/GCP/Azure).
+
+Rotación recomendada (v1.0)
+
+Vigencia típica: 30–90 días.
+
+Ventana de superposición: EasyLogs acepta el token viejo y el nuevo durante 7–14 días (rotación con kid).
+
+Cliente: cambia el secreto antes de la fecha límite y reinicia su servicio. Sin cambios de código.
+
+Si se quiere cero reinicios, el cliente puede leer el token desde un archivo y tu app lo relee en cada envío o cada X minutos.
+
+5) Errores comunes
+
+401 Missing bearer token
+Falta el header Authorization. Agregar:
+
+Authorization: Bearer <TOKEN_DE_INGESTA>
+
+
+403 Invalid token / scope
+Token inválido, expirado o sin logs:write. Pedir uno nuevo a EasyLogs.
+
+400 level y message son requeridos
+Completar campos mínimos.
+
+429 limit_exceeded
+Se alcanzó la cuota mensual; implementar reintentos/backoff en el cliente (p. ej., 0.3s/0.6s/1.2s).
+
+6) Buenas prácticas del cliente
+
+Enviar logs en background (no bloquear la UI/peticiones de negocio).
+
+Timeout 3–5s y reintentos para 408/429/5xx.
+
+Timestamps en UTC (new Date().toISOString()).
+
+No incluir PII sensible en message/context.
+
+7) Checklist del cliente (2 minutos)
+
+ Tengo EASYLOGS_TOKEN en un secreto (no en el código).
+
+ Puedo enviar con cURL un log de prueba (200/201).
+
+ Mi app lee EASYLOGS_TOKEN del secreto/env.
+
+ Documenté cómo actualizar el secreto y reiniciar el proceso.
+
+ Manejo reintentos y timeouts.  
+
+
+ ¿Qué es kid?
+
+kid = Key ID (identificador de la clave con la que se firmó el token).
+
+Se coloca en el header del JWT, por ejemplo:
+
+{
+  "alg": "HS256",
+  "typ": "JWT",
+  "kid": "2025-08-rotacion"
+}
+
+📌 ¿Para qué sirve?
+
+Permite tener más de una clave activa al mismo tiempo.
+
+Ejemplo:
+
+Hoy firmas tokens con la clave K1 (kid=old).
+
+Generas una nueva clave K2 (kid=new).
+
+Tus servidores aceptan tokens firmados tanto con K1 como con K2 durante unos días.
+
+Eso se llama ventana de superposición.
+
+Facilita la rotación de tokens sin cortar a los clientes:
+
+Emito un token nuevo con kid=new.
+
+Los clientes lo usan sin cambiar código, solo actualizan el secreto.
+
+El backend sabe mirar el kid y elegir la clave correcta (getSecretByKid(kid)).
+
+🚦 Ejemplo de flujo con rotación
+
+Hoy (día 0):
+
+Tokens se firman con clave K1, kid=2025-07.
+
+Servidor acepta K1.
+
+Rotación (día 30):
+
+Genero clave K2, kid=2025-08.
+
+Servidor acepta K1 y K2.
+
+Los clientes deben actualizar su token a K2 antes del día 45.
+
+Expira K1 (día 45):
+
+Servidor solo acepta K2.
+
+Si un cliente aún usa un token viejo (kid=2025-07), le dará 403 Invalid token.
+
+💡 Ventaja
+
+Esto significa que puedes cambiar las llaves y tokens de forma controlada sin pedirle al cliente que haga un “deploy” de código.
+Solo tienen que actualizar el token en su config/env, y mientras dura la ventana, ambos tokens son válidos.

@@ -4,18 +4,15 @@ const {
   createLog,
   getLogs,
   getLogLevels,
-  getServiceStatus
+  getServiceStatus // 👈 nueva función
 } = require('../controllers/log.controller');
-
 const verifyToken = require('../middlewares/verifyToken');
-const ingestAuth = require('../middlewares/ingestAuth'); // 👈 nuevo middleware para ingesta
 
-// Ingesta de logs (con Token de Ingesta)
-router.post('/logs', ingestAuth, createLog);
-
-// Consultas de logs (con token normal de usuario/app)
+router.post('/logs', verifyToken, createLog);
 router.get('/logs', verifyToken, getLogs);
 router.get('/logs/levels', verifyToken, getLogLevels);
-router.get('/service-status', verifyToken, getServiceStatus);
+
+// NUEVO ENDPOINT
+router.get('/service-status', verifyToken, getServiceStatus); // ✅
 
 module.exports = router;

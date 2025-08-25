@@ -1,0 +1,59 @@
+Servidores de despliegue (MVP)
+Backend (Node + MongoDB)
+
+Servidor: Render (o Railway como alternativa).
+
+Enlace API (ejemplo en Render):
+
+https://easylog-backend.onrender.com
+
+
+MongoDB: MongoDB Atlas (Free Tier M0, 512 MB).
+
+Cluster: mongodb+srv://<user>:<pass>@cluster0.xxxx.mongodb.net/easylogs
+
+Frontend (Angular)
+
+Servidor: Vercel (más simple para Angular estático) o Netlify.
+
+Enlace Front (ejemplo en Vercel):
+
+ 
+
+https://easy-log-saa-s.vercel.app/login
+
+acá los datos para que lo pruebes:
+https://easy-log-saa-s.vercel.app/login
+Usuario: pato@empresa123.com
+Clave: 123456
+
+
+📌 Flujo de despliegue recomendado
+
+Backend:
+
+Subir repo easylog-backend a GitHub.
+
+Conectarlo a Render → Web Service → build npm install && npm start.
+
+Definir variables de entorno (MONGO_URI, JWT_SECRET, etc).
+
+API queda en https://easylog-backend.onrender.com/api/....
+
+Frontend:
+
+Subir repo EasyLogSaaS a GitHub.
+
+Conectarlo a Vercel o Netlify.
+
+Build Angular con ng build --prod.
+
+Configurar en environment.ts el apiUrl apuntando al backend.
+
+📎 Resumen de links (ejemplo MVP)
+
+Frontend: https://easy-log-saa-s.vercel.app/login
+
+Backend API: https://easylog-backend.onrender.com/api
+
+MongoDB Atlas: https://cloud.mongodb.com/

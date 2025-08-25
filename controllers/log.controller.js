@@ -41,13 +41,21 @@ async function consumeMonthlyQuota({ companyId, limit, incBy }) {
   return doc2; // null => sin cupo
 }
 
-// POST /api/logs → guardar log con companyId (string) y userId, aplicando hard-limit por plan
+// ===================== POST /api/logs =====================
+// Guarda log aplicando hard-limit por plan.
+// Soporta dos flujos de auth:
+//  - Ingesta (middleware ingestAuth):   req.companyId  (preferido)
+//  - App/usuario (middleware verifyToken): req.user?.companyId
 exports.createLog = async (req, res) => {
-  const userId = req.user?.id;
-  const companyKey = req.user?.companyId; // ej: "empresa123" (string del JWT)
-  if (!companyKey) {
+  // companyId confiable (prioriza ingestAuth)
+  const companyKey = req.companyId || req.user?.companyId;
+
+  if (!companyKey || typeof companyKey !== 'string') {
     return res.status(400).json({ message: 'Missing companyId in token' });
   }
+
+  // userId: si viene de verifyToken úsalo; si no, admite el que venga en el body como metadato
+  const userId = req.user?.id || req.body?.userId || null;
 
   try {
     // 1) Obtener límite mensual desde Company.plan (o 'free') → Plan.monthlyLogLimit
@@ -80,8 +88,19 @@ exports.createLog = async (req, res) => {
       });
     }
 
-    // 3) Construir el log (asegurar que timestamp sea Date real)
+    // 3) Construir el log
     const { level, service, app, message, url, context, timestamp } = req.body;
+
+    // Validaciones mínimas (puedes endurecer si quieres)
+    if (!level || !message) {
+      // Rollback del cupo por payload inválido
+      await Usage.updateOne(
+        { companyId: companyKey, period },
+        { $inc: { logsIngested: -1 }, $set: { updatedAt: new Date() } }
+      ).catch(() => {});
+      return res.status(400).json({ message: 'level y message son requeridos' });
+    }
+
     let ts = timestamp ? new Date(timestamp) : new Date();
     if (isNaN(ts.getTime())) ts = new Date();
 
@@ -94,7 +113,8 @@ exports.createLog = async (req, res) => {
       context,
       timestamp: ts,
       userId,
-      companyId: companyKey // consistente con Usage
+      // ⚠️ Ignora cualquier companyId del body y fuerza el del token
+      companyId: companyKey
     });
 
     try {
@@ -104,7 +124,7 @@ exports.createLog = async (req, res) => {
       // 4) Rollback del cupo si falló el insert del log
       await Usage.updateOne(
         { companyId: companyKey, period },
-        { $inc: { logsIngested: -incBy }, $set: { updatedAt: new Date() } }
+        { $inc: { logsIngested: -1 }, $set: { updatedAt: new Date() } }
       ).catch(() => {});
       throw saveErr;
     }
@@ -114,10 +134,12 @@ exports.createLog = async (req, res) => {
   }
 };
 
-// GET /api/logs → traer solo logs de la empresa (máx 1000, más recientes primero)
+// ===================== GET /api/logs =====================
 exports.getLogs = async (req, res) => {
   try {
     const companyKey = req.user?.companyId;
+    if (!companyKey) return res.status(401).json({ message: 'Unauthorized' });
+
     const logs = await Log.find({ companyId: companyKey })
       .sort({ timestamp: -1 })
       .limit(1000);
@@ -128,10 +150,12 @@ exports.getLogs = async (req, res) => {
   }
 };
 
-// GET /api/logs/levels → niveles de criticidad únicos por empresa
+// ===================== GET /api/logs/levels =====================
 exports.getLogLevels = async (req, res) => {
   try {
     const companyKey = req.user?.companyId;
+    if (!companyKey) return res.status(401).json({ message: 'Unauthorized' });
+
     const levels = await Log.distinct('level', { companyId: companyKey });
     return res.json(levels);
   } catch (err) {
@@ -140,10 +164,12 @@ exports.getLogLevels = async (req, res) => {
   }
 };
 
-// GET /api/service-status → último estado por (app, service)
+// ===================== GET /api/service-status =====================
 exports.getServiceStatus = async (req, res) => {
   try {
     const companyKey = req.user?.companyId;
+    if (!companyKey) return res.status(401).json({ message: 'Unauthorized' });
+
     const logs = await Log.find({ companyId: companyKey }).sort({ timestamp: -1 });
 
     const servicioMap = new Map();
