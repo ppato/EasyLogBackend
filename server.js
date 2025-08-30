@@ -8,11 +8,14 @@ const helmet = require('helmet');
 const compression = require('compression');
 
 // Rutas
-const authRoutes  = require('./routes/auth.routes');
-const logRoutes   = require('./routes/log.routes');
-const userRoutes  = require('./routes/user.routes');
-const queryRoutes = require('./routes/query.routes');
-const quotaRoutes = require('./routes/quota.routes');
+const authRoutes  = require('./routes/auth.routes');   // públicas: /api/login, /api/register, etc.
+const logRoutes   = require('./routes/log.routes');    // protegidas (montadas en /api/logs)
+const userRoutes  = require('./routes/user.routes');   // protegidas (montadas en /api/users)
+const queryRoutes = require('./routes/query.routes');  // públicas (o protégelas si quieres)
+const quotaRoutes = require('./routes/quota.routes');  // públicas (o protégelas si quieres)
+
+// Middleware de autenticación (JWT)
+const auth = require('./middlewares/auth');
 
 const app = express();
 
@@ -20,15 +23,14 @@ const app = express();
 app.use(helmet());
 app.use(compression());
 
-/* -------- CORS dinámico (local + prod Render + previews Vercel) -------- */
-// En Render define: CORS_ORIGIN=https://easy-log-saa-s.vercel.app
-// En local puedes dejarlo vacío y usará los orígenes por defecto (localhost).
+/* -------- CORS dinámico (local + prod Render + previews Vercel) --------
+   En Render define: CORS_ORIGIN=https://easy-log-saa-s.vercel.app[,https://tu-dominio.com]
+----------------------------------------------------------------------- */
 const rawEnvOrigins = (process.env.CORS_ORIGIN || '')
   .split(',')
   .map(s => s.trim())
   .filter(Boolean);
 
-// Orígenes por defecto en desarrollo (si CORS_ORIGIN no está seteado)
 const defaultDevOrigins = [
   'http://localhost:4200',
   'http://127.0.0.1:4200',
@@ -36,7 +38,6 @@ const defaultDevOrigins = [
   'http://127.0.0.1:5173'
 ];
 
-// Allowlist final
 const allowList = rawEnvOrigins.length > 0
   ? rawEnvOrigins
   : (process.env.NODE_ENV === 'production' ? [] : defaultDevOrigins);
@@ -45,28 +46,21 @@ console.log('[CORS] allowList =', allowList);
 
 const corsOptions = {
   origin(origin, cb) {
-    // Permite llamadas sin Origin (curl/Postman/healthchecks)
-    if (!origin) {
-      console.log('[CORS] request sin Origin -> ALLOW');
-      return cb(null, true);
-    }
+    if (!origin) return cb(null, true); // curl/Postman/healthchecks
 
     let ok = false;
     try {
       const url  = new URL(origin);
-      const base = `${url.protocol}//${url.hostname}`; // mismo host sin puerto
+      const base = `${url.protocol}//${url.hostname}`;
       const host = url.hostname;
 
       ok =
-        allowList.includes(origin) ||        // match exacto (con puerto)
-        allowList.includes(base)   ||        // por si el puerto difiere
-        /\.vercel\.app$/i.test(host);        // *preview* de Vercel
-
+        allowList.includes(origin) ||
+        allowList.includes(base)   ||
+        /\.vercel\.app$/i.test(host); // previews Vercel
     } catch (_) {
       ok = false;
     }
-
-    console.log(`[CORS] Origin: ${origin} -> ${ok ? 'ALLOW' : 'BLOCK'}`);
     return cb(ok ? null : new Error('Not allowed by CORS'), ok);
   },
   credentials: true,
@@ -74,19 +68,19 @@ const corsOptions = {
   allowedHeaders: ['Content-Type','Authorization','X-Requested-With']
 };
 
-// Modo permisivo temporal (solo para debug local): exporta CORS_ANY=1
+// Modo permisivo temporal (debug local): exporta CORS_ANY=1
 if (process.env.CORS_ANY === '1') {
-  console.warn('[CORS] Modo permisivo habilitado (CORS_ANY=1)');
+  console.warn('[CORS] Permissive mode enabled (CORS_ANY=1)');
   app.use(cors());
   app.options('*', cors());
 } else {
   app.use(cors(corsOptions));
-  app.options('*', cors(corsOptions)); // Preflight
+  app.options('*', cors(corsOptions));
 }
 
 /* -------- Body parsing -------- */
 app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '1mb' }));
 
 /* -------- Healthcheck -------- */
 app.get('/health', (_, res) => {
@@ -101,11 +95,15 @@ mongoose
   .catch(err => console.error('❌ MongoDB error:', err));
 
 /* -------- Rutas API -------- */
-app.use('/api', authRoutes);
-app.use('/api', logRoutes);
-app.use('/api/users', userRoutes);
-app.use('/api', queryRoutes);
-app.use('/api', quotaRoutes);
+/* Públicas (no requieren token) */
+app.use('/api', authRoutes);   // /api/login, /api/register
+app.use('/api', queryRoutes);  // /api/query...
+app.use('/api', quotaRoutes);  // /api/quota...
+
+/* Protegidas (requieren token válido) */
+// ⭐️ IMPORTANTE: dentro de routes/log.routes.js usa router.get('/') (SIN '/logs')
+app.use('/api/logs', auth, logRoutes);   // GET /api/logs, POST /api/logs, etc.
+app.use('/api/users', auth, userRoutes); // GET /api/users, ...
 
 /* -------- 404 API -------- */
 app.use((req, res, next) => {
@@ -117,9 +115,18 @@ app.use((req, res, next) => {
 
 /* -------- Error handler -------- */
 app.use((err, req, res, next) => {
-  console.error('💥 Error:', err.message);
+  console.error('💥 Error:', err);
   if (res.headersSent) return next(err);
-  res.status(500).json({ error: 'Internal Server Error' });
+
+  // CORS bloqueado
+  if (err && err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS_BLOCKED', message: 'Origin no permitido' });
+  }
+
+  // Si el middleware de auth u otros seteó un status explícito, respétalo
+  const status = err.status || err.statusCode || 500;
+  const msg = err.message || 'Internal Server Error';
+  res.status(status).json({ error: msg });
 });
 
 /* -------- Server -------- */
