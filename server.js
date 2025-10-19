@@ -14,6 +14,8 @@ const userRoutes  = require('./routes/user.routes');   // protegidas (montadas e
 const queryRoutes = require('./routes/query.routes');  // públicas (o protégelas si quieres)
 const quotaRoutes = require('./routes/quota.routes');  // públicas (o protégelas si quieres)
 
+const insightsRoutes = require('./routes/insights.routes');
+
 // Middleware de autenticación (JWT)
 const auth = require('./middlewares/auth');
 
@@ -104,7 +106,7 @@ app.use('/api', quotaRoutes);  // /api/quota...
 // ⭐️ IMPORTANTE: dentro de routes/log.routes.js usa router.get('/') (SIN '/logs')
 app.use('/api/logs', auth, logRoutes);   // GET /api/logs, POST /api/logs, etc.
 app.use('/api/users', auth, userRoutes); // GET /api/users, ...
-
+app.use('/api/insights', auth, insightsRoutes); // GET /api/insights, GET /api/insights/spikes
 /* -------- 404 API -------- */
 app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {
